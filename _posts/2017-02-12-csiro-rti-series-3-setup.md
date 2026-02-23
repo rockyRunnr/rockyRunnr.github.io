@@ -1,8 +1,8 @@
 ---
 title: "CSIRO RTI Series (3): Contiki + CC2650 Setup on Linux"
 date: 2017-02-12 10:01:50 +0900
-categories: [Research, RTI]
-tags: [contiki, cc2650, linux, setup]
+categories: [Research, CSIRO]
+tags: [csiro-rti, contiki, cc2650, linux, setup]
 image:
   path: /assets/img/posts/csiro/csiro_6_1.png
 description: "A practical setup guide for building and flashing Contiki apps to CC2650 boards on Linux."
@@ -54,3 +54,10 @@ cd /opt/ti/uniflash_3.4/ccs_base/common/uscif/xds110/
 ```
 
 This initializes the debug interface for first-time use.
+
+
+## 2026 Update Note
+
+- Migrated and language-polished in 2026.
+- Setup commands are preserved for historical reproducibility, but some dependencies are legacy (Ubuntu 14.04-era).
+- If you replicate this today, containerizing the build environment is strongly recommended.

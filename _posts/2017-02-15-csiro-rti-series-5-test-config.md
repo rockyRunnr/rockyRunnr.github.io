@@ -1,8 +1,8 @@
 ---
 title: "CSIRO RTI Series (5): Test Configuration"
 date: 2017-02-15 10:01:50 +0900
-categories: [Research, RTI]
-tags: [experiment, configuration, voxel, deployment]
+categories: [Research, CSIRO]
+tags: [csiro-rti, experiment, configuration, voxel, deployment]
 image:
   path: /assets/img/posts/csiro/csiro_5_1.png
 description: "Node deployment and reconstruction parameters used for RTI experiments."
@@ -36,3 +36,10 @@ PIXEL_VARIANCE = 0.4
 ```
 
 > Note: The original draft had small typos (`RAW`, `WITH`, and `381` links). They are corrected here for readability and consistency.
+
+
+## 2026 Update Note
+
+- Migrated and language-polished in 2026.
+- Minor notation/typo fixes were applied (e.g., link count and parameter names) for consistency.
+- Parameter values are retained as experiment records and may require re-tuning for different physical layouts.

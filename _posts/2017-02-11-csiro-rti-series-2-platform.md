@@ -1,8 +1,8 @@
 ---
 title: "CSIRO RTI Series (2): TI CC2650 + Contiki Platform"
 date: 2017-02-11 10:01:50 +0900
-categories: [Research, RTI]
-tags: [cc2650, contiki, low-power, wireless-sensor-network]
+categories: [Research, CSIRO]
+tags: [csiro-rti, cc2650, contiki, low-power, wireless-sensor-network]
 image:
   path: /assets/img/posts/csiro/csiro_2_1.png
 description: "Why TI SensorTag CC2650 and Contiki were selected for low-power RTI development."
@@ -28,3 +28,10 @@ Contiki is an open-source operating system for IoT devices. It is designed for c
    <http://www.ti.com/lit/ug/tidu862/tidu862.pdf>
 2. Contiki OS  
    <http://www.contiki-os.org>
+
+
+## 2026 Update Note
+
+- Migrated and language-polished in 2026.
+- Hardware/OS choices reflect the project period; today, equivalent low-power platforms can be substituted without changing the RTI architecture.
+- This post is kept as a design record of platform decisions made during the original CSIRO internship project.

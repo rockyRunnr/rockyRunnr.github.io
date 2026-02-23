@@ -1,11 +1,12 @@
 ---
 title: "CSIRO RTI Series (6): Image Reconstruction"
 date: 2017-02-16 10:01:50 +0900
-categories: [Research, RTI]
-tags: [image-reconstruction, rssi, inverse-problem]
+categories: [Research, CSIRO]
+tags: [csiro-rti, image-reconstruction, rssi, inverse-problem]
 image:
   path: /assets/img/posts/csiro/csiro_6_0.png
 description: "Reconstruction model and comparison of three RSSI-derived y-vector strategies."
+pin: true
 ---
 
 ## Image Reconstruction
@@ -58,3 +59,10 @@ I used **method 1** as the default because it gave the most stable overall resul
 ### Reference
 
 [1] Wilson, Joey, and Neal Patwari. “Radio tomographic imaging with wireless networks.” *IEEE Transactions on Mobile Computing* 9.5 (2010): 621–632.
+
+
+## 2026 Update Note
+
+- Migrated and language-polished in 2026.
+- The three y-vector strategies remain useful framing choices for RSSI-based reconstruction trade-offs.
+- In current practice, this stage can be further improved with regularization tuning and adaptive baseline management.

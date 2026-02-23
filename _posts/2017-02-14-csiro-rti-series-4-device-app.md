@@ -1,8 +1,8 @@
 ---
 title: "CSIRO RTI Series (4): Device Application and Scheduling Design"
 date: 2017-02-14 10:01:50 +0900
-categories: [Research, RTI]
-tags: [contiki, scheduling, rssi, firmware]
+categories: [Research, CSIRO]
+tags: [csiro-rti, contiki, scheduling, rssi, firmware]
 image:
   path: /assets/img/posts/csiro/csiro_4_1.png
 description: "Master-node scheduling and collision avoidance design for RSSI-based RTI."
@@ -46,3 +46,10 @@ Source code (original project):
 
 - Normal node: <https://github.com/generousRocky/radioTomography/tree/master/contiki-examples/radio_tomography>
 - Master node: <https://github.com/generousRocky/radioTomography/tree/master/contiki-examples/rti_mater>
+
+
+## 2026 Update Note
+
+- Migrated and language-polished in 2026.
+- The time-slot scheduling design is still the key practical lesson: measurement quality collapses when concurrent transmissions are not controlled.
+- This approach can be generalized to other low-power sensing networks where signal quality is central to inference.

@@ -1,11 +1,12 @@
 ---
 title: "CSIRO RTI Series (1): What Is Radio Tomographic Imaging?"
 date: 2017-02-10 10:01:50 +0900
-categories: [Research, RTI]
-tags: [rti, wireless-sensor-network, rssi, csiro]
+categories: [Research, CSIRO]
+tags: [csiro-rti, rti, wireless-sensor-network, rssi, csiro]
 image:
   path: /assets/img/posts/csiro/csiro_1_1.png
 description: "Introduction to Radio Tomographic Imaging (RTI), project scope, and system overview."
+pin: true
 ---
 
 ## What is Radio Tomographic Imaging?
@@ -42,3 +43,10 @@ The next posts cover the scheduling design and reconstruction details.
 ### Reference
 
 [1] Wilson, Joey, and Neal Patwari. “Radio tomographic imaging with wireless networks.” *IEEE Transactions on Mobile Computing* 9.5 (2010): 621–632.
+
+
+## 2026 Update Note
+
+- This post was migrated from the original blog and language-polished in 2026.
+- Core RTI concepts remain valid: passive sensing, RSSI-based attenuation tracking, and image reconstruction through link measurements.
+- For modern replication, consider newer IoT stacks (e.g., Zephyr + nRF52/ESP32-class hardware) if Contiki/CC2650 toolchains are unavailable.
