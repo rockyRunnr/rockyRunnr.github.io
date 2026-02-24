@@ -5,6 +5,7 @@ categories: [Projects, ollacode]
 tags: [ollama, ai-coding, telegram-bot, python, cli, qwen3-coder]
 description: "Day 1 of building ollacode — a lightweight CLI coding assistant powered by Ollama's qwen3-coder:30b model with Telegram bot integration."
 pin: true
+mermaid: true
 ---
 
 ## What is ollacode?
