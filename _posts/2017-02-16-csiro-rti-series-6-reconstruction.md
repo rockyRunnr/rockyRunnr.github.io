@@ -6,7 +6,6 @@ tags: [csiro-rti, image-reconstruction, rssi, inverse-problem]
 image:
   path: /assets/img/posts/csiro/csiro_6_0.png
 description: "Reconstruction model and comparison of three RSSI-derived y-vector strategies."
-pin: true
 ---
 
 ## Image Reconstruction

@@ -6,7 +6,6 @@ tags: [csiro-rti, rti, wireless-sensor-network, rssi, csiro]
 image:
   path: /assets/img/posts/csiro/csiro_1_1.png
 description: "Introduction to Radio Tomographic Imaging (RTI), project scope, and system overview."
-pin: true
 ---
 
 ## What is Radio Tomographic Imaging?
