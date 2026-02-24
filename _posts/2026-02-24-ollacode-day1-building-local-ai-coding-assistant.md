@@ -26,30 +26,23 @@ I've been impressed by tools like Claude Code and Aider, but I wanted something:
 
 Here's how ollacode is structured:
 
-```
-         ┌─────────────┐    ┌──────────────────┐
-         │  CLI (Rich)  │    │  Telegram Bot     │
-         │  Streaming   │    │  Per-user sessions│
-         │  Approval UI │    │  HTML formatting  │
-         └──────┬───────┘    └────────┬──────────┘
-                └──────────┬──────────┘
-                ┌──────────┴──────────┐
-                │  Conversation Engine │
-                │  • Chat history      │
-                │  • Tool orchestration│
-                │  • Agentic loop      │
-                │  • Project memory    │
-                └──────────┬──────────┘
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-     ┌──────────┐  ┌──────────────┐  ┌──────────┐
-     │  Ollama   │  │  Tool System │  │  System  │
-     │  Client   │  │  (7 tools)   │  │  Prompt  │
-     │  (httpx)  │  │              │  │  + Memory │
-     └─────┬─────┘  └──────────────┘  └──────────┘
-           ▼
-    Ollama Server (localhost:11434)
-    qwen3-coder:30b
+```mermaid
+graph TD
+    CLI["🖥️ CLI - Rich\nStreaming + Approval UI"] --> Engine
+    TG["📱 Telegram Bot\nPer-user Sessions"] --> Engine
+    Engine["⚙️ Conversation Engine\nHistory | Tool Orchestration\nAgentic Loop | Project Memory"]
+    Engine --> Ollama["🔗 Ollama Client\nhttpx async"]
+    Engine --> Tools["🛠️ Tool System\n7 tools"]
+    Engine --> Prompts["📋 System Prompt\n+ OLLACODE.md Memory"]
+    Ollama --> Server["🧠 Ollama Server\nlocalhost:11434\nqwen3-coder:30b"]
+
+    style CLI fill:#4a9eff,stroke:#2d7cd4,color:#fff
+    style TG fill:#0088cc,stroke:#006699,color:#fff
+    style Engine fill:#9b59b6,stroke:#7d3c98,color:#fff
+    style Ollama fill:#e67e22,stroke:#d35400,color:#fff
+    style Tools fill:#27ae60,stroke:#1e8449,color:#fff
+    style Prompts fill:#f39c12,stroke:#d68910,color:#fff
+    style Server fill:#2c3e50,stroke:#1a252f,color:#fff
 ```
 
 The key design decision was separating the **Conversation Engine** from the interfaces. Both CLI and Telegram share the same engine, so all the smart logic (tool calling, agentic loops, project memory) works identically regardless of how you interact with it.
@@ -96,16 +89,24 @@ The `edit_file` tool is particularly important — inspired by Aider's approach,
 
 The conversation engine runs an **agentic loop** — up to 10 iterations of:
 
-```
-User Request → AI Response → Tool Calls Detected?
-                                    ↓ yes
-                              Execute Tools
-                                    ↓
-                              Feed Results Back
-                                    ↓
-                              AI Analyzes + Responds
-                                    ↓
-                              More Tool Calls? → Loop
+```mermaid
+flowchart LR
+    A["👤 User Request"] --> B["🤖 AI Response"]
+    B --> C{"Tool Calls?"}
+    C -- No --> D["✅ Return Response"]
+    C -- Yes --> E["⚙️ Execute Tools"]
+    E --> F["📊 Feed Results Back"]
+    F --> G["🤖 AI Analyzes"]
+    G --> H{"More Tools?"}
+    H -- Yes --> E
+    H -- No --> D
+
+    style A fill:#3498db,stroke:#2980b9,color:#fff
+    style B fill:#9b59b6,stroke:#7d3c98,color:#fff
+    style D fill:#27ae60,stroke:#1e8449,color:#fff
+    style E fill:#e67e22,stroke:#d35400,color:#fff
+    style F fill:#f39c12,stroke:#d68910,color:#fff
+    style G fill:#9b59b6,stroke:#7d3c98,color:#fff
 ```
 
 If a tool returns an error, the engine automatically prompts the AI to analyze and fix the issue. This means the AI can:
