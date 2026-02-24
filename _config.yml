@@ -10,6 +10,9 @@ lang: ko-KR
 
 # Change to your timezone › https://zones.arilyn.cc
 timezone: Asia/Seoul
+
+# Allow posts with future dates (KST is UTC+9)
+future: true
 # ↓ --------------------------
 
 title: "대인배 로키의 데브 투 피엠"
