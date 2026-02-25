@@ -3,6 +3,8 @@ title: "IsoKV: An Isolation Scheme for Key-Value Stores Exploiting SSD Internal 
 date: 2019-12-31 10:00:00 +0900
 categories: [Research, Database]
 tags: [isokv, rocksdb, open-channel-ssd, nvme, key-value-store, hipc, garbage-collection]
+image:
+  path: /assets/img/posts/research/hipc.png
 description: "Paper accepted at IEEE HiPC 2019 — IsoKV isolates key-value store I/O by exploiting SSD internal parallelism to reduce interference and eliminate garbage collection overhead."
 ---
 

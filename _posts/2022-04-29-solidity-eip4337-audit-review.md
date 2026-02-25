@@ -3,6 +3,8 @@ title: "Solidity Deep Dive (4): EIP-4337 Account Abstraction — Audit Report Re
 date: 2022-04-29 10:00:00 +0900
 categories: [Development, Blockchain]
 tags: [solidity, ethereum, eip-4337, account-abstraction, audit, openzeppelin, security]
+image:
+  path: /assets/img/posts/solidity/sol4_1.png
 description: "Key findings from OpenZeppelin's audit of the EIP-4337 Account Abstraction implementation — deposit manipulation, silent token transfer failures, and the dangers of Solidity's transfer()."
 ---
 

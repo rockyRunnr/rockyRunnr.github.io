@@ -3,6 +3,8 @@ title: "Solidity Deep Dive (2): Is Memory Always Cheaper Than Storage?"
 date: 2022-04-17 10:00:00 +0900
 categories: [Development, Blockchain]
 tags: [solidity, ethereum, evm, gas-optimization, smart-contract]
+image:
+  path: /assets/img/posts/solidity/sol2_1.png
 description: "Exploring the gas cost trade-off between memory and storage reference variables in Solidity — when storage is actually cheaper."
 ---
 

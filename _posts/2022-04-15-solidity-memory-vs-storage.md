@@ -3,6 +3,8 @@ title: "Solidity Deep Dive (1): Memory vs. Storage Variable Rules"
 date: 2022-04-15 10:00:00 +0900
 categories: [Development, Blockchain]
 tags: [solidity, ethereum, evm, smart-contract, memory, storage]
+image:
+  path: /assets/img/posts/solidity/sol1_1.png
 description: "Complete rules for how Solidity variables are stored in the EVM — when memory vs. storage is used, reference vs. value copies, and common pitfalls."
 ---
 

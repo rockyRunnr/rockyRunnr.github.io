@@ -3,6 +3,8 @@ title: "Open-Channel SSD Series (4): Getting Started with CNEX Labs Westlake SSD
 date: 2017-08-28 10:00:00 +0900
 categories: [Research, Open-Channel SSD]
 tags: [open-channel-ssd, lightnvm, cnex, pblk, linux-kernel, nvme-cli]
+image:
+  path: /assets/img/posts/ocssd/openChannelSSD_tips_01.png
 description: "Practical step-by-step guide to setting up an Open-Channel SSD using CNEX Labs Westlake hardware, from kernel compilation to file system mounting."
 ---
 

@@ -11,7 +11,7 @@ mermaid: true
 
 In the [previous post](/posts/ollacode-day2-memory-optimization/), I optimized ollacode's memory usage by switching the system prompt from Korean to English. The theory is simple: LLM tokenizers are optimized for English, so the same meaning requires fewer tokens.
 
-But **theory alone isn't enough.** I built [ollama-bench](https://github.com/rockyRunner-ai/ollama-bench) and measured the difference with **real data**.
+But **theory alone isn't enough.** I built [ollama-bench](https://github.com/rockyRunnr/ollama-bench) and measured the difference with **real data**.
 
 ## Experiment Setup
 
@@ -123,7 +123,7 @@ flowchart TD
 
 ## Tools Used
 
-This benchmark was run with [ollama-bench](https://github.com/rockyRunner-ai/ollama-bench):
+This benchmark was run with [ollama-bench](https://github.com/rockyRunnr/ollama-bench):
 
 ```bash
 # Korean prompt benchmark

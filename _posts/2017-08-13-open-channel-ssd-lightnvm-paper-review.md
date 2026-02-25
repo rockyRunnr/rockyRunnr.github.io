@@ -3,6 +3,8 @@ title: "Open-Channel SSD Series (1): LightNVM Paper Review"
 date: 2017-08-13 10:00:00 +0900
 categories: [Research, Open-Channel SSD]
 tags: [open-channel-ssd, lightnvm, nand-flash, pblk, linux-kernel, ssd, ftl]
+image:
+  path: /assets/img/posts/ocssd/openChannelSSD.png
 description: "Reading notes on the FAST'17 paper — LightNVM: The Linux Open-Channel SSD Subsystem. Covers NAND management, the PPA I/O interface, pblk architecture, and experimental evaluation."
 ---
 

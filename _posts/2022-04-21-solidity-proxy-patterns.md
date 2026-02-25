@@ -3,6 +3,8 @@ title: "Solidity Deep Dive (3): Proxy Patterns and Upgradable Contracts"
 date: 2022-04-21 10:00:00 +0900
 categories: [Development, Blockchain]
 tags: [solidity, ethereum, proxy-pattern, upgradable-contract, openzeppelin, delegatecall]
+image:
+  path: /assets/img/posts/solidity/sol3_1.png
 description: "How Solidity proxy patterns enable upgradable smart contracts — fallback functions, delegatecall, unstructured storage, and storage collision prevention."
 ---
 

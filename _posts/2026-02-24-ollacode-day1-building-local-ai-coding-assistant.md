@@ -192,7 +192,7 @@ Based on my research of Claude Code, Aider, and Cline, here's what I'm planning:
 ## Get It
 
 ```bash
-git clone https://github.com/rockyRunner-ai/ollacode.git
+git clone https://github.com/rockyRunnr/ollacode.git
 cd ollacode
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e .

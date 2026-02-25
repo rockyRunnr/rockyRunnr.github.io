@@ -3,6 +3,8 @@ title: "Open-Channel SSD Series (5): pblk Write Path — Kernel Code Analysis"
 date: 2017-09-09 11:00:00 +0900
 categories: [Research, Open-Channel SSD]
 tags: [open-channel-ssd, lightnvm, pblk, linux-kernel, kernel-code, write-path]
+image:
+  path: /assets/img/posts/ocssd/openChannelSSD.png
 description: "Kernel source code walkthrough of the pblk write path in the LightNVM Open-Channel SSD subsystem — from write-buffer insertion through ring buffer to NVMe dispatch."
 ---
 

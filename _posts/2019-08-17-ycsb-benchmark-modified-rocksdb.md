@@ -3,6 +3,8 @@ title: "Running YCSB Benchmarks on a Modified RocksDB Build"
 date: 2019-08-17 10:00:00 +0900
 categories: [Research, Database]
 tags: [rocksdb, ycsb, benchmark, jni, open-channel-ssd, liblightnvm]
+image:
+  path: /assets/img/posts/research/ycsbrocksdb1.png
 description: "Step-by-step guide to benchmarking a custom-modified RocksDB with YCSB — building a JNI package from source-modified RocksDB and integrating it into the YCSB framework."
 ---
 

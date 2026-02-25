@@ -3,6 +3,8 @@ title: "유튜브를 접으면서"
 date: 2022-04-20 13:44:20 +0900
 categories: [Writing]
 tags: [youtube, blog, personal]
+image:
+  path: /assets/img/posts/writing/youtubeEnd0.png
 description: "2년간 운영한 개발 유튜브 채널을 정리하고, 다시 블로그로 돌아온 이유."
 ---
 

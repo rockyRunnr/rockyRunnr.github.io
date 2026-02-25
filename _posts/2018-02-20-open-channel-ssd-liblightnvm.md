@@ -1,5 +1,5 @@
 ---
-title: "Open-Channel SSD Series (7): liblightnvm — User-Space Open-Channel SSD Control"
+title: "Open-Channel SSD Series (6): liblightnvm — User-Space Open-Channel SSD Control"
 date: 2018-02-20 10:00:00 +0900
 categories: [Research, Open-Channel SSD]
 tags: [open-channel-ssd, lightnvm, liblightnvm, user-space, nand-flash, vectorized-io]

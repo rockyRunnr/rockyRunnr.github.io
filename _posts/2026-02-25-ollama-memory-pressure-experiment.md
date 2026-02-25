@@ -199,7 +199,7 @@ Setting `OLLAMA_NUM_PARALLEL` higher than needed wastes real memory on empty KV 
 ## Reproducing This Experiment
 
 ```bash
-git clone https://github.com/rockyRunner-ai/ollama-bench
+git clone https://github.com/rockyRunnr/ollama-bench
 cd ollama-bench && pip install -e .
 
 # Run the pure memory pressure test
@@ -214,7 +214,7 @@ The script automatically restarts Ollama at each `NUM_PARALLEL` level, runs 5 re
 
 ## GitHub
 
-- [rockyRunner-ai/ollama-bench](https://github.com/rockyRunner-ai/ollama-bench)
+- [rockyRunnr/ollama-bench](https://github.com/rockyRunnr/ollama-bench)
 
 ---
 

@@ -51,7 +51,7 @@ The KV cache buffers are allocated to their **maximum size** (`num_ctx`) even be
 
 ### The Sweep
 
-I added a `parallel-sweep` mode to [ollama-bench](https://github.com/rockyRunner-ai/ollama-bench) that:
+I added a `parallel-sweep` mode to [ollama-bench](https://github.com/rockyRunnr/ollama-bench) that:
 
 1. Fires **P** identical concurrent requests (P = 1, 2, 3, ...)
 2. Measures per-request gen speed, total throughput, TTFT, and memory
@@ -158,7 +158,7 @@ For a **32 GB Mac with a 30B model**:
 ## Running This Yourself
 
 ```bash
-git clone https://github.com/rockyRunner-ai/ollama-bench
+git clone https://github.com/rockyRunnr/ollama-bench
 cd ollama-bench && pip install -e .
 
 # Set parallelism (requires Ollama restart)
@@ -170,7 +170,7 @@ ollama-bench --model your-model --mode parallel-sweep --max-parallel 4 --output 
 
 ## GitHub
 
-- [rockyRunner-ai/ollama-bench](https://github.com/rockyRunner-ai/ollama-bench) — now with `parallel-sweep` mode
+- [rockyRunnr/ollama-bench](https://github.com/rockyRunnr/ollama-bench) — now with `parallel-sweep` mode
 
 ---
 

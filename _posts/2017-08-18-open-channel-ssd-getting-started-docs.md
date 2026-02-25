@@ -3,6 +3,8 @@ title: "Open-Channel SSD Series (2): Getting Started — Official Docs Summary"
 date: 2017-08-18 10:00:00 +0900
 categories: [Research, Open-Channel SSD]
 tags: [open-channel-ssd, lightnvm, linux-kernel, qemu, nvme-cli, pblk]
+image:
+  path: /assets/img/posts/ocssd/openChannelSSD_tran.png
 description: "A translated and annotated summary of the Open-Channel SSD official documentation — kernel setup, nvme-cli, QEMU configuration, and common problems."
 ---
 

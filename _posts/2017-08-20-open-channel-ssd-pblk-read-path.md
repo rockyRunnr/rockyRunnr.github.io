@@ -3,6 +3,8 @@ title: "Open-Channel SSD Series (3): pblk Read Path — Kernel Code Analysis"
 date: 2017-08-20 10:00:00 +0900
 categories: [Research, Open-Channel SSD]
 tags: [open-channel-ssd, lightnvm, pblk, linux-kernel, kernel-code, read-path]
+image:
+  path: /assets/img/posts/ocssd/openChannelSSD.png
 description: "Kernel source code walkthrough of the pblk read path in the LightNVM Open-Channel SSD subsystem — from bio submission to block-layer dispatch."
 ---
 

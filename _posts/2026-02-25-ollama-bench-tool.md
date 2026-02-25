@@ -15,7 +15,7 @@ When running local LLMs with Ollama, some questions naturally arise:
 - Does changing the system prompt **actually** make it faster?
 - Do parameter tweaks produce **measurable** differences?
 
-Answering these requires **reproducible workloads** with **consistent measurements**. That's why I built [ollama-bench](https://github.com/rockyRunner-ai/ollama-bench).
+Answering these requires **reproducible workloads** with **consistent measurements**. That's why I built [ollama-bench](https://github.com/rockyRunnr/ollama-bench).
 
 ## Metrics Explained
 
@@ -143,7 +143,7 @@ ollama-bench --compare before.json after.json
 ## Installation
 
 ```bash
-git clone https://github.com/rockyRunner-ai/ollama-bench
+git clone https://github.com/rockyRunnr/ollama-bench
 cd ollama-bench
 pip install -e .
 
@@ -169,7 +169,7 @@ ollama-bench --workload my_prompts.json --model llama3.1:8b
 
 ## GitHub
 
-- [rockyRunner-ai/ollama-bench](https://github.com/rockyRunner-ai/ollama-bench)
+- [rockyRunnr/ollama-bench](https://github.com/rockyRunnr/ollama-bench)
 
 ---
 
