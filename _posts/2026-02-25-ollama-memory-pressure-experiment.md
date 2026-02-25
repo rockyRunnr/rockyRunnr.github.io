@@ -49,11 +49,11 @@ flowchart LR
 | Component | Spec |
 |-----------|------|
 | Machine | **Mac Mini (2024)** |
-| Chip | **Apple M4 Pro** |
+| Chip | **Apple M4** |
 | Unified Memory | **32 GB** |
-| Memory Bandwidth | ~273 GB/s |
-| GPU Cores | 20-core |
-| Storage | 512 GB SSD (swap target) |
+| Memory Bandwidth | ~120 GB/s |
+| GPU Cores | 10-core |
+| Storage | 256 GB SSD (swap target) |
 | OS | macOS Sequoia |
 
 Apple Silicon's unified memory architecture means GPU and CPU share the same physical RAM pool. When Ollama allocates KV cache, it directly competes with the OS and other applications for the same 32 GB.
@@ -157,7 +157,7 @@ The slight speed bump at NP=6–7 (22.2–22.3 t/s) is measurement noise within 
 At NP=9, Ollama RSS hits 13.6 GB. Combined with macOS (~8 GB) and other processes, the system approaches the 32 GB ceiling. The OS responds in stages:
 
 1. **Memory compression** (NP=9) — macOS compresses inactive pages in RAM. Small CPU overhead, minor speed impact.
-2. **Page-outs to SSD** (NP=10+) — when compression isn't enough, pages are written to SSD swap. SSD bandwidth (~3 GB/s) is ~100× slower than memory bandwidth (~273 GB/s).
+2. **Page-outs to SSD** (NP=10+) — when compression isn't enough, pages are written to SSD swap. SSD bandwidth (~3 GB/s) is ~40× slower than memory bandwidth (~120 GB/s).
 3. **Swap thrashing** (NP=12) — 131 page-outs during a simple P=1 benchmark. The GPU must wait for swapped-out data to be read back from SSD.
 
 ### Phase 3: Stabilized Zone (NP=13–15)
