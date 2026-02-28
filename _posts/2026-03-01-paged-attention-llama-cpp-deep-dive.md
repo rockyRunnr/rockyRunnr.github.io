@@ -215,20 +215,36 @@ This works because the paged layer manages **block metadata** — it doesn't nee
 
 **Takeaway:** In a codebase that uses `static_cast` for polymorphic dispatch, your new types must either inherit from the expected type or delegate entirely. There's no room for duck typing.
 
-## Test Results
+## Smoke Test
 
-I tested the implementation with **Qwen2.5-0.5B-Instruct Q4_K_M** on an Apple M4 Mac Mini:
+I ran a basic functional test with **Qwen2.5-0.5B-Instruct Q4_K_M** on an Apple M4 Mac Mini to verify the implementation works:
+
+```bash
+# Standard
+$ llama-cli -m qwen2.5-0.5b.gguf -p "What is 2+2? Answer in one word:"
+# → "Addition" — valid output ✓
+
+# Paged
+$ llama-cli -m qwen2.5-0.5b.gguf -p "What is 2+2? Answer in one word:" --kv-paged
+# → "Two." — valid output ✓
+```
 
 | Metric | Standard | Paged |
 |--------|----------|-------|
-| Prompt speed | 232.1 t/s | 1081.9 t/s |
-| Generation speed | 228.0 t/s | 201.8 t/s |
 | Context memory | 384 MiB | 384 MiB |
 | Total GPU memory | 1145 MiB | 1145 MiB |
+| Valid output | ✓ | ✓ |
 
-Both modes produced valid answers. Memory usage is identical — expected, since this phase pre-allocates the full pool.
+**Memory usage is identical** — expected, since this phase pre-allocates the full pool.
 
-The generation speed difference (~11%) likely comes from the indirection overhead and block-aligned sizing. This should be optimized as the implementation matures.
+I'm intentionally not reporting speed numbers here. The prompt was ~15 tokens, a single run, on a tiny model with 384 MiB of KV cache. At this scale, timing noise (warm cache effects, OS scheduling) dominates any real measurement. A meaningful performance comparison requires:
+
+- A larger model (7B+) where KV cache is multiple GB
+- Long prompts (1K+ tokens) to amortize startup costs
+- Multiple runs to average out variance
+- Multi-sequence scenarios where paging actually helps
+
+This test validates one thing: **the paged cache produces correct output through the full inference pipeline.** Performance benchmarking is saved for when the implementation does something the standard cache can't — non-contiguous block allocation.
 
 ## What's Next
 
