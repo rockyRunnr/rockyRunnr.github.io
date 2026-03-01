@@ -4,6 +4,7 @@ date: 2026-02-25 01:00:00 +0900
 categories: [Projects, ollacode]
 tags: [ollama, ai-coding, memory-optimization, python, context-management, token-efficiency]
 description: "Day 2 of ollacode development — optimizing token usage for local LLMs with English prompts, context compaction, and smart history management."
+image: "/assets/img/posts/2026-thumbs/2026-02-25-ollacode-day2.jpg"
 mermaid: true
 ---
 

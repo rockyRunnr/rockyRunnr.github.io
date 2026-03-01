@@ -4,6 +4,7 @@ date: 2026-02-25 01:40:00 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, performance, python, local-llm, tools]
 description: "I built ollama-bench to measure local LLM performance degradation — token generation speed, prefill speed, TTFT, and memory usage over progressive requests."
+image: "/assets/img/posts/2026-thumbs/2026-02-25-ollama-bench-tool.jpg"
 mermaid: true
 ---
 

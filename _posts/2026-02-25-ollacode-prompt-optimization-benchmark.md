@@ -4,6 +4,7 @@ date: 2026-02-25 01:50:00 +0900
 categories: [Projects, ollacode]
 tags: [ollama, optimization, benchmark, performance, token-efficiency, prompt-engineering]
 description: "Switching ollacode's system prompt from Korean to English and measuring real performance gains with ollama-bench. 60% faster TTFT, 55% fewer input tokens."
+image: "/assets/img/posts/2026-thumbs/2026-02-25-ollacode-prompt-optimization.jpg"
 mermaid: true
 ---
 
