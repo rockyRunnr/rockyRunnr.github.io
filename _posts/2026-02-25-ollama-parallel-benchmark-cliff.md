@@ -4,7 +4,6 @@ date: 2026-02-25 02:50:00 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, performance, parallel, kv-cache, memory, local-llm]
 description: "Sweeping parallelism from 1 to 10 concurrent requests on a 30B model to find exactly where performance falls off a cliff — and why KV cache pre-allocation is the culprit."
-image: "/assets/img/posts/2026-thumbs/2026-02-25-ollama-parallel-benchmark-cliff.jpg"
 mermaid: true
 ---
 

@@ -4,7 +4,6 @@ date: 2026-02-25 23:00:00 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, memory, swap, kv-cache, performance, apple-silicon]
 description: "What happens when you hold GPU load constant and only increase memory pressure? I designed an experiment to isolate swap-induced slowdown from GPU contention on a 32GB Mac Mini."
-image: "/assets/img/posts/2026-thumbs/2026-02-25-ollama-memory-pressure-experiment.jpg"
 mermaid: true
 ---
 
