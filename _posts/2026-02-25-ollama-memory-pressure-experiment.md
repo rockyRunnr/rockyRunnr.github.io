@@ -1,48 +1,30 @@
 ---
-title: "Isolating Memory Swap Degradation in Ollama: A Pure Memory Pressure Experiment"
+title: "Ollama Memory Pressure with One Active Request: Measurements and Limits"
 date: 2026-02-25 23:00:00 +0900
+last_modified_at: 2026-09-13 12:00:00 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, memory, swap, kv-cache, performance, apple-silicon]
-description: "What happens when you hold GPU load constant and only increase memory pressure? I designed an experiment to isolate swap-induced slowdown from GPU contention on a 32GB Mac Mini."
+description: "Holding request concurrency at one while increasing configured KV slots on a 32GB Mac Mini: observed slowdown, sampled RSS, and the limits of system-wide paging counters."
 mermaid: true
 ---
 
-## The Problem: Entangled Variables
+**Correction — September 13, 2026:** The original post treated system-wide Pageouts as proof of KV-specific swap thrashing and labeled prefill duration as TTFT. It also called the experiment purely memory-isolated. This revision preserves the measurements while separating them from unverified mechanisms and removes untested safe-concurrency recommendations.
 
-In my [previous parallel benchmark](/posts/ollama-parallel-benchmark-cliff/), I sent N concurrent requests with parallelism from 1 to 10. The results showed performance degradation, but two factors were changing simultaneously:
+## The Question
 
-1. **GPU compute contention** — more parallel requests = more matrix operations competing for GPU cycles
-2. **Memory pressure** — more parallel requests = more KV cache slots allocated
+The [parallel sweep](/posts/ollama-parallel-benchmark-cliff/) varied active requests within a fixed four-slot configuration. Its RSS stayed almost constant as concurrency increased, so that sweep did not isolate swap-induced slowdown. Changing the configured slot count was a separate experiment.
 
-The speed decline could have been caused by either factor, or both. To understand what's really happening, I needed to **control one variable while changing the other**.
+Here I kept **one active request** and increased `OLLAMA_NUM_PARALLEL`, restarting Ollama at each level. In the tested configuration, more configured slots increased the memory provisioned at model load even when most slots were idle. This reduces the confounding effect of simultaneous active requests, but does not prove that GPU work, caching, engine configuration, and system state were identical.
 
 ## Experiment Design
 
-### The Key Insight
-
-Ollama pre-allocates KV cache memory based on `OLLAMA_NUM_PARALLEL` at model load time — **regardless of how many requests are actually being served**. Setting `NUM_PARALLEL=10` allocates 10 KV cache buffers even if only 1 request is active.
-
-This means I can:
-- **Fix GPU load at exactly 1 request** (constant compute)
-- **Increase only memory** by raising `NUM_PARALLEL` (more pre-allocated KV slots)
-
-Any performance change must be caused by **memory pressure alone**.
-
 ```mermaid
 flowchart LR
-    subgraph "Traditional Parallel Test"
-        A1["P=1"] -->|"+GPU +Mem"| A2["P=4"]
-        A2 -->|"+GPU +Mem"| A3["P=10"]
-    end
-
-    subgraph "This Experiment"
-        B1["NP=1, P=1"] -->|"Same GPU, +Mem"| B2["NP=8, P=1"]
-        B2 -->|"Same GPU, +Mem"| B3["NP=15, P=1"]
-    end
-
-    style A3 fill:#e74c3c,stroke:#c0392b,color:#fff
-    style B3 fill:#e74c3c,stroke:#c0392b,color:#fff
+    A["NP=1, active requests=1"] -->|"Restart; increase configured slots"| B["NP=8, active requests=1"]
+    B -->|"Restart; increase configured slots"| C["NP=15, active requests=1"]
 ```
+
+The hypothesis was that larger preallocated capacity would increase memory pressure and affect the same sequential workload. Page-level attribution would require additional instrumentation.
 
 ### Hardware
 
@@ -63,10 +45,10 @@ Apple Silicon's unified memory architecture means GPU and CPU share the same phy
 | Parameter | Value | Why |
 |-----------|-------|-----|
 | Model | `qwen2.5-coder:7b` (Q4_K_M, 4.7 GB) | Small enough to leave room for KV cache growth |
-| `num_ctx` | 32,768 (model maximum) | Maximizes KV cache size per slot |
+| `num_ctx` | 32,768 | Context setting used for each configured slot |
 | Quantization | Q4_K_M | Standard Ollama default |
 | Seed | 42 | Reproducibility |
-| Temperature | 0.0 | Deterministic output |
+| Temperature | 0.0 | Reduce sampling variability |
 
 ### Workload
 
@@ -81,24 +63,19 @@ This prompt is intentionally simple and consistent — the goal isn't to test di
 2. Send one warm-up request (triggers model + KV cache allocation)
 3. Run **5 benchmark requests** with **3-second cooldown** between each
 4. Average the 5 results for stability
-5. Record: generation speed, prefill speed, TTFT, memory (RSS), swap usage, page-outs
+5. Record: generation speed, prefill speed and duration, sampled RSS, system swap usage, and changes in system Pageouts
 
-### What's Being Measured
+### What the Script Measures
 
-At each `NUM_PARALLEL` level, the system allocates `N` KV cache buffers of size `num_ctx × per_token_bytes`. For `qwen2.5-coder:7b` with `num_ctx=32768`:
+The [script](https://github.com/rockyRunnr/ollama-bench/blob/main/memory_pressure_test.py) computes generation and prefill speed from Ollama's token counts and durations. Its `ttft_ms` field is `prompt_eval_duration / 10⁶`; requests are non-streaming, so it does not measure client-observed time to first token.
 
-```
-KV cache per slot ≈ 1 GB
-Model parameters  ≈ 4.7 GB
+`memory_mb` is the larger of the pre- and post-measurement RSS sums for matching Ollama processes. The calculation divides by 1024², so the values are MiB despite the original MB field name. This is not a continuously sampled peak, and shared pages can be counted in multiple processes.
 
-NP=1:  4.7 + 1×1 =  ~5.7 GB total
-NP=8:  4.7 + 8×1 = ~12.7 GB total
-NP=13: 4.7 + 13×1 = ~17.7 GB total (+ OS ~8 GB = ~26 GB... approaching 32 GB limit)
-```
+`swap_used_mb` comes from `psutil.swap_memory()`. `page_outs` is the change in the system-wide `vm_stat` Pageouts counter across each five-request measurement interval. Neither identifies the owning process or buffer. The observed roughly 950 MiB RSS increase per additional slot in the early rows is consistent with increased KV provisioning; it is not a direct per-buffer allocation trace.
 
 ## Results
 
-| NP | Gen t/s | Prefill t/s | TTFT (ms) | Mem (MB) | Page-Outs | Phase |
+| NP | Gen t/s | Prefill t/s | Prefill (ms) | Sampled RSS (MiB) | Pageouts delta | Phase |
 |:--:|:-------:|:-----------:|:---------:|:--------:|:---------:|:-----:|
 | 1 | **21.1** | 1,085 | 53 | 5,683 | 0 | 🟢 Flat |
 | 2 | 21.1 | 1,091 | 53 | 6,632 | 0 | 🟢 |
@@ -120,7 +97,7 @@ NP=13: 4.7 + 13×1 = ~17.7 GB total (+ OS ~8 GB = ~26 GB... approaching 32 GB li
 
 ```mermaid
 xychart-beta
-    title "Generation Speed vs NUM_PARALLEL (GPU Load Constant)"
+    title "Generation Speed vs NUM_PARALLEL (One Active Request)"
     x-axis "NUM_PARALLEL" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     y-axis "Gen Speed (t/s)" 10 --> 25
     line [21.1, 21.1, 21.0, 21.0, 20.9, 22.2, 22.3, 20.2, 18.7, 17.2, 15.6, 14.3, 14.4, 14.4, 14.4]
@@ -130,71 +107,35 @@ xychart-beta
 xychart-beta
     title "Ollama Memory (RSS) vs NUM_PARALLEL"
     x-axis "NUM_PARALLEL" [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    y-axis "Memory (MB)" 4000 --> 18000
+    y-axis "Sampled RSS (MiB)" 4000 --> 18000
     line [5683, 6632, 7588, 8540, 9495, 10448, 11403, 12679, 13632, 14587, 15536, 16386, 16471, 16522, 16840]
 ```
 
-## Analysis: Three Distinct Phases
+## Observations and Interpretation
 
-### Phase 1: Flat Zone (NP=1–8)
+### NP=1–8: RSS rises with relatively stable speed
 
-Generation speed stays rock-steady at **~21 t/s** across 8 levels, while memory grows linearly from 5.7 to 12.7 GB. This proves that:
+Generation speed stays around 20–22 t/s while sampled RSS rises from 5,683 to 12,679 MiB. This is consistent with extra configured capacity consuming memory before those slots serve requests. It does not prove that unused slots have zero execution cost. The modest speed variation was not accompanied by per-run uncertainty estimates in the saved aggregate results.
 
-- **KV cache pre-allocation consumes real memory** (~1 GB per slot)
-- **Unused KV slots have zero impact on inference speed** — the GPU processes the same single request regardless
+### NP=9–12: speed falls and Pageouts increase
 
-The slight speed bump at NP=6–7 (22.2–22.3 t/s) is measurement noise within the ±1 t/s variance.
+The raw result changes from **21.09 t/s at NP=1 to 14.31 t/s at NP=12**, a 32.1% reduction. RSS at NP=12 is 16,385.6 MiB. The Pageouts deltas are 0, 6, 42, and 131 at NP=9, 10, 11, and 12 respectively. [Raw results](https://github.com/rockyRunnr/ollama-bench/blob/main/memory_pressure_results.json)
 
-### Phase 2: Degradation Zone (NP=9–12)
+These observations are consistent with memory pressure contributing to slowdown, but they do not identify a particular compression or paging mechanism. **Swap was already about 1,789 MiB at NP=1**. NP=10 was the first positive Pageouts delta in these measurement intervals, not the first time the system had used swap. Recorded swap usage actually declined to about 1,773 MiB at NP=12.
 
-| NP | Speed Drop | Page-Outs | What's Happening |
-|:--:|:----------:|:---------:|:----------------|
-| 9 | -11% | 0 | Memory pressure begins; OS starts compressing pages |
-| 10 | -18% | 6 | **First swap to SSD** — page-outs detected |
-| 11 | -26% | 42 | Swap activity accelerating |
-| 12 | -32% | **131** | Peak swap activity; speed cliff |
+The original statements that NP=9 marked the start of compression, that NP=12 proved swap thrashing, and that the GPU was waiting on swapped KV pages were not supported by these counters. Resolving that would require time-correlated CPU/GPU measurements, page-ins, compressor statistics, and process/resource attribution.
 
-At NP=9, Ollama RSS hits 13.6 GB. Combined with macOS (~8 GB) and other processes, the system approaches the 32 GB ceiling. The OS responds in stages:
+### NP=13–15: speed levels off
 
-1. **Memory compression** (NP=9) — macOS compresses inactive pages in RAM. Small CPU overhead, minor speed impact.
-2. **Page-outs to SSD** (NP=10+) — when compression isn't enough, pages are written to SSD swap. SSD bandwidth (~3 GB/s) is ~40× slower than memory bandwidth (~120 GB/s).
-3. **Swap thrashing** (NP=12) — 131 page-outs during a simple P=1 benchmark. The GPU must wait for swapped-out data to be read back from SSD.
+The saved results level off near 14.4 t/s. A stable working set or changed reclamation behavior could contribute, but the measurements do not show which pages became hot or cold, or prove that idle GPU KV buffers were swapped. This is an observed plateau, not a verified OS-equilibrium mechanism.
 
-### Phase 3: Stabilized Zone (NP=13–15)
+## What to Take from the Experiment
 
-Surprisingly, speed **stops declining** at ~14.4 t/s and holds steady through NP=15. Why?
+The result supports a practical investigation direction: **configured capacity can increase resident memory and correlate with slower service even with one active request**. It does not establish a universal 32% penalty, or a memory-only causal effect with all other variables excluded.
 
-This is macOS's memory management reaching **equilibrium**. The OS has identified which pages are "hot" (actively used by the running request) and which are "cold" (unused KV cache slots). Hot pages stay in RAM; cold pages get compressed or swapped. Since only 1 request is active, the working set is relatively small and stable.
+For this 32 GB, 7B, 32K-context experiment, slowdown became visible around NP=9. I have removed the earlier table of “max safe” settings for 16 GB and 64 GB machines and other model sizes because those configurations were not measured here. Capacity planning also needs weights, recurrent state, compute buffers, other processes, and workload-dependent peaks; reserving a fixed 8 GB for the OS cannot guarantee safety.
 
-## Key Takeaways
-
-### 1. Memory Pressure Alone Causes 32% Speed Loss
-
-With **identical GPU load** (P=1), increasing memory from 5.7 to 16.8 GB via KV cache pre-allocation reduced generation speed from 21.1 to 14.3 t/s. This is pure memory-induced degradation.
-
-### 2. The "Cliff" Is Actually a Slope
-
-Unlike GPU contention (which causes immediate throughput saturation), memory pressure creates a **gradual degradation curve** from NP=9 to NP=12, then stabilizes. There's no single catastrophic failure point — it's a ~4-step slide.
-
-### 3. macOS Recovers Gracefully
-
-The stabilization at NP=13+ shows macOS handles memory overcommit reasonably well through compression and intelligent page eviction. The system doesn't crash or become unresponsive — it just gets 32% slower.
-
-### 4. Pre-Allocated ≠ Free
-
-Setting `OLLAMA_NUM_PARALLEL` higher than needed wastes real memory on empty KV cache buffers. On a 32 GB machine with a 7B model, `NUM_PARALLEL > 8` starts causing measurable performance degradation even for a single active request.
-
-## Practical Recommendations
-
-| System RAM | Model Size | Max Safe NUM_PARALLEL |
-|:----------:|:----------:|:---------------------:|
-| 16 GB | 7B (Q4) | 3–4 |
-| 32 GB | 7B (Q4) | **8** |
-| 32 GB | 30B (Q4) | 2–3 |
-| 64 GB | 7B (Q4) | 20+ |
-| 64 GB | 30B (Q4) | 8–10 |
-
-> **Formula**: `Max NP ≈ (System RAM − Model Size − 8 GB for OS) ÷ KV Cache per Slot`
+A stronger follow-up would record actual KV allocation, continuously sampled process and GPU memory, client-streamed TTFT, repeated-run uncertainty, and matched warm-up/cache conditions while varying configured capacity.
 
 ## Reproducing This Experiment
 
@@ -202,7 +143,7 @@ Setting `OLLAMA_NUM_PARALLEL` higher than needed wastes real memory on empty KV 
 git clone https://github.com/rockyRunnr/ollama-bench
 cd ollama-bench && pip install -e .
 
-# Run the pure memory pressure test
+# Run the configured-slot sweep with one active request
 python memory_pressure_test.py \
     --model qwen2.5-coder:7b \
     --num-ctx 32768 \
@@ -210,7 +151,7 @@ python memory_pressure_test.py \
     --output results.json
 ```
 
-The script automatically restarts Ollama at each `NUM_PARALLEL` level, runs 5 requests with 3-second cooldowns, and monitors swap via `vm_stat`.
+The script automatically restarts Ollama at each `NUM_PARALLEL` level, runs 5 requests with 3-second cooldowns, and records system-wide Pageouts from `vm_stat` plus swap usage from `psutil`. These are system-level counters.
 
 ## GitHub
 
@@ -218,4 +159,4 @@ The script automatically restarts Ollama at each `NUM_PARALLEL` level, runs 5 re
 
 ---
 
-*The most interesting finding isn't the speed loss — it's the three-phase behavior. Memory pressure doesn't cause a binary "works/broken" state. It causes a gradual degradation that eventually stabilizes as the OS finds equilibrium between hot and cold pages.*
+*The measured speed decline and plateau motivated the later KV allocation investigation. Identifying the exact memory mechanism remains separate from observing those phases.*

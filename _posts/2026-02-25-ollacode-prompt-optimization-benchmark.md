@@ -1,15 +1,18 @@
 ---
 title: "ollacode System Prompt Optimization: Korean → English Benchmark Results"
 date: 2026-02-25 01:50:00 +0900
+last_modified_at: 2026-09-13 12:00:00 +0900
 categories: [Projects, ollacode]
 tags: [ollama, optimization, benchmark, performance, token-efficiency, prompt-engineering]
-description: "Switching ollacode's system prompt from Korean to English and measuring real performance gains with ollama-bench. 60% faster TTFT, 55% fewer input tokens."
+description: "Switching ollacode's system prompt from Korean to English and measuring real performance gains with ollama-bench. About 60% lower recorded prefill duration and 55% fewer first-round input tokens in this local comparison."
 mermaid: true
 ---
 
+**Correction — September 13, 2026:** The original TTFT columns use Ollama's `prompt_eval_duration`; they are now labeled prefill duration. The reported memory values are samples, not continuous peaks. The table is retained as a historical comparison, with causal claims narrowed to what it measures.
+
 ## Background
 
-In the [previous post](/posts/ollacode-day2-memory-optimization/), I optimized ollacode's memory usage by switching the system prompt from Korean to English. The theory is simple: LLM tokenizers are optimized for English, so the same meaning requires fewer tokens.
+In the [previous post](/posts/ollacode-day2-memory-optimization/), I tried reducing ollacode's prompt token usage by rewriting its system prompt in English. Token usage depends on the tokenizer and the exact wording. The English rewrite used fewer first-round input tokens in this comparison; that does not establish a universal advantage for English prompts.
 
 But **theory alone isn't enough.** I built [ollama-bench](https://github.com/rockyRunnr/ollama-bench) and measured the difference with **real data**.
 
@@ -34,7 +37,7 @@ But **theory alone isn't enough.** I built [ollama-bench](https://github.com/roc
 
 #### Korean System Prompt
 
-| Round | In Tok | Out Tok | Gen t/s | Prefill t/s | TTFT(ms) | Total(ms) | Mem(MB) |
+| Round | In Tok | Out Tok | Gen t/s | Prefill t/s | Prefill(ms) | Total(ms) | Mem(MB) |
 |:-----:|:------:|:-------:|:-------:|:-----------:|:--------:|:---------:|:-------:|
 | 1 | 732 | 296 | 36.4 | 317.4 | 2,307 | 25,103 | 19,335 |
 | 2 | 1,057 | 591 | 34.6 | 2,181.7 | 484 | 17,806 | 19,333 |
@@ -44,7 +47,7 @@ But **theory alone isn't enough.** I built [ollama-bench](https://github.com/roc
 
 #### English System Prompt
 
-| Round | In Tok | Out Tok | Gen t/s | Prefill t/s | TTFT(ms) | Total(ms) | Mem(MB) |
+| Round | In Tok | Out Tok | Gen t/s | Prefill t/s | Prefill(ms) | Total(ms) | Mem(MB) |
 |:-----:|:------:|:-------:|:-------:|:-----------:|:--------:|:---------:|:-------:|
 | 1 | 331 | 232 | 38.2 | 339.6 | 975 | 7,211 | 19,356 |
 | 2 | 591 | 527 | 36.9 | 1,934.2 | 306 | 14,748 | 19,357 |
@@ -57,69 +60,63 @@ But **theory alone isn't enough.** I built [ollama-bench](https://github.com/roc
 | Metric | Korean | English | Change |
 |--------|:------:|:-------:|:------:|
 | **Avg Gen Speed** | 32.8 t/s | 34.0 t/s | **+3.8%** ✅ |
-| **Avg TTFT** | 1,146 ms | 461 ms | **-59.8%** ✅ |
+| **Avg Prefill Duration** | 1,146 ms | 461 ms | **-59.8%** ✅ |
 | **Avg Prefill Speed** | 2,112 t/s | 4,008 t/s | **+89.8%** ✅ |
 | **Round 1 Input Tokens** | 732 | 331 | **-54.8%** ✅ |
-| **Peak Memory** | 19,345 MB | 19,358 MB | +0.1% (negligible) |
+| **Max Sampled RSS** | 19,345 MB | 19,358 MB | +0.1% (negligible) |
 
 ## Analysis
 
-### 1. 55% Fewer Input Tokens — The Root Cause
+### 1. 55% Fewer First-Round Input Tokens
 
-This is the most fundamental difference. The same system prompt content uses **732 tokens** in Korean but only **331 tokens** in English.
+The first round reports **732 input tokens** for the Korean configuration and **331** for the English configuration, a 54.8% reduction. These are request-level input counts, not a separately measured tokenizer count of the system prompt alone. Later rounds include generated conversation history, which also differs between runs.
 
 ```mermaid
 graph LR
-    A["🇰🇷 Korean Prompt<br/>732 tokens"] -->|"-55%"| B["🇺🇸 English Prompt<br/>331 tokens"]
+    A["Korean configuration<br/>732 first-round input tokens"] -->|"-55%"| B["English configuration<br/>331 first-round input tokens"]
 
     style A fill:#e74c3c,stroke:#c0392b,color:#fff
     style B fill:#27ae60,stroke:#1e8449,color:#fff
 ```
 
-**Why such a big difference?** LLM tokenizers (e.g., BPE) are optimized for English text. An English word typically maps to 1–2 tokens, while Korean syllables often require separate tokens each:
+The rewrite changed both language and wording/length. Tokenization can contribute to the difference, but the table does not isolate language as the only cause or validate identical instruction-following quality.
 
-- `"function"` → 1 token
-- `"함수"` (same meaning) → 2–3 tokens
+### 2. Recorded Prefill Duration Fell by About 60%
 
-### 2. TTFT Improved by 60% — Perceived Responsiveness
-
-Average TTFT dropped from **1,146ms → 461ms** — a 60% improvement.
-
-This is the **wait time before the first character appears**. Going from 1.1 seconds to 0.5 seconds is a substantial UX improvement. TTFT is directly proportional to input token count, so fewer input tokens = faster first response.
+Average reported prompt evaluation duration fell from **1,146 ms to 461 ms**. The benchmark stored this in `ttft_ms`, but it did not stream responses or measure the first token's arrival. It therefore supports a reduction in this server-side phase, not a measured 60% reduction in client TTFT. [Metric definition and limitation](/posts/ollama-bench-tool/#3-prefill-duration-historically-labeled-ttft)
 
 ### 3. Prefill Speed Doubled (+90%)
 
 Prefill speed jumped from **2,112 → 4,008 t/s** — nearly **2×** faster.
 
-**Key insight**: In Rounds 4–5, the English prompt achieves **6,000–8,400 t/s** prefill. As input grows larger, GPU matrix operation parallelization becomes more efficient. Korean's higher token count reduces this efficiency since there are more tokens to process for the same semantic content.
+Rounds 4–5 report **6,000–8,400 t/s** in the English configuration. The table alone does not identify the cause: processed-token counts, prefix reuse, warm-up, and differing conversation histories need to be controlled before attributing this to GPU efficiency or prompt language.
 
 ### 4. Generation Speed — Modest Improvement
 
 Gen speed improved from **32.8 → 34.0 t/s** (+3.8%).
 
-Generation speed depends more on **model architecture and hardware** than input size, so the difference is small. However, a smaller KV cache (from fewer input tokens) improves cache hit efficiency slightly.
+This is a small observed difference in a five-round comparison. Context length, differing outputs, and run variability can affect it. No cache-hit counters or repeated-run uncertainty estimates were recorded here, so a cache-efficiency explanation is unverified.
 
 ### 5. Memory — No Change
 
-Memory usage stayed at ~19.3GB. The prompt size difference (~400 tokens) is negligible compared to the 30B model's parameter memory footprint.
+Sampled RSS stayed near the original table's 19.3GB scale. Fixed KV preallocation and the large weight footprint can hide differences in used token slots; this observation does not show that token count has no effect on KV requirements.
 
 ## Key Takeaway
 
 ```mermaid
 flowchart TD
-    A["System Prompt<br/>Korean → English"] --> B["Input Tokens 55% ↓"]
-    B --> C["TTFT 60% ↓<br/>(Responsiveness ↑)"]
-    B --> D["Prefill 90% ↑<br/>(Processing speed ↑)"]
-    B --> E["Gen Speed 4% ↑<br/>(Modest gain)"]
-    B --> F["Memory: No change"]
+    A["Observed Korean vs English comparison"] --> B["First-round input tokens 55% lower"]
+    A --> C["Recorded prefill duration 60% lower"]
+    A --> D["Recorded prefill throughput 90% higher"]
+    A --> E["Recorded generation speed about 4% higher"]
+    A --> F["Sampled RSS nearly unchanged"]
 
     style A fill:#3498db,stroke:#2980b9,color:#fff
     style C fill:#27ae60,stroke:#1e8449,color:#fff
     style D fill:#27ae60,stroke:#1e8449,color:#fff
 ```
 
-> **Always write internal prompts in English for local LLMs.**
-> Regardless of the user's language, keep system prompts, tool descriptions, and internal messages in English for better token efficiency. The AI will still respond in whatever language the user writes in, so the user experience is unaffected.
+> The English rewrite reduced input tokens and recorded prefill duration in this configuration. Compare token count, instruction-following quality, output language, and end-to-end latency for the actual model and workload before adopting the same change elsewhere.
 
 ## Tools Used
 

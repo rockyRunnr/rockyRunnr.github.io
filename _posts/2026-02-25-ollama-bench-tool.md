@@ -1,11 +1,14 @@
 ---
 title: "ollama-bench: Building a Performance Benchmark Tool for Ollama"
 date: 2026-02-25 01:40:00 +0900
+last_modified_at: 2026-09-13 12:00:00 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, performance, python, local-llm, tools]
-description: "I built ollama-bench to measure local LLM performance degradation — token generation speed, prefill speed, TTFT, and memory usage over progressive requests."
+description: "I built ollama-bench to measure local LLM performance degradation — token generation speed, prefill duration, and sampled process RSS over progressive requests."
 mermaid: true
 ---
+
+**Correction — September 13, 2026:** The original tool labels `prompt_eval_duration` as TTFT. That field is prefill duration, not measured time to the first streamed token. The memory samples also do not measure continuous peak usage. This post now uses the metric names supported by the implementation; the historical code/JSON field names remain unchanged.
 
 ## Why Build a Benchmark Tool?
 
@@ -34,8 +37,8 @@ Gen t/s = eval_count / eval_duration × 10⁹
 **What affects it**:
 - GPU VRAM and memory bandwidth
 - Model size (more parameters = slower)
-- Quantization level (Q4 is faster than Q8)
-- **Mostly independent of input context size** — generation speed depends on KV cache hit efficiency during the decode phase
+- Quantization type and the backend kernels that implement it
+- Context length: each full-attention decode step reads more cached K/V as the sequence grows, even though past K/V projections are reused
 
 ### 2. Prefill Speed (Prefill t/s)
 
@@ -60,22 +63,17 @@ flowchart LR
 
 Prefill is dominated by matrix multiplications, which benefit from GPU parallelism. That's why prefill is typically **much faster** than generation (thousands of t/s vs. tens of t/s).
 
-**Why it matters**: As input grows longer, prefill time increases proportionally. With 8,000 input tokens, prefill alone can take several seconds.
+**Why it matters**: Longer inputs generally increase prefill work. Scaling depends on attention, batching, prefix reuse, and the model; full-attention prefill includes a quadratic term in sequence length, so time is not universally proportional to token count.
 
-### 3. TTFT (Time To First Token)
+### 3. Prefill Duration (Historically Labeled TTFT)
 
+```text
+prefill_ms = prompt_eval_duration / 10⁶
 ```
-TTFT = prompt_eval_duration (nanoseconds → milliseconds)
-```
 
-**What it measures**: The time between sending input and **receiving the first output token**. Essentially equals the prefill time.
+The implementation stores this in `ttft_ms`, but it measures the server-reported prompt evaluation duration. Requests use `stream: false`; the tool does not timestamp the first generated token arriving at the client.
 
-**Why it matters**: This is the "wait time" users experience. If TTFT is 3 seconds, nothing appears for 3 seconds, then output suddenly starts streaming. This metric has the **biggest impact on perceived responsiveness**.
-
-**Practical benchmarks**:
-- < 500ms: Feels instant
-- 500ms – 2s: Acceptable
-- \> 3s: Feels slow
+True client-observed TTFT also includes queuing, request/network overhead, any required loading, and the first decode step. Measuring it requires streaming and timing the first non-empty output token. The historical `ttft_ms` values should be interpreted as **prefill duration**, not an end-to-end responsiveness measurement. [Measurement code](https://github.com/rockyRunnr/ollama-bench/blob/main/ollama_bench/core.py)
 
 ### 4. Total Duration
 
@@ -83,7 +81,7 @@ TTFT = prompt_eval_duration (nanoseconds → milliseconds)
 Total = total_duration (nanoseconds → milliseconds)
 ```
 
-**What it measures**: End-to-end time from request start to completion. Includes model loading + prefill + decode.
+**What it measures**: Ollama's server-reported total request duration, including phases such as loading, prefill, and decode. The code also measures client wall time separately; server duration is not the same as full client/network end-to-end latency.
 
 ### 5. Memory (MB)
 
@@ -91,9 +89,9 @@ Total = total_duration (nanoseconds → milliseconds)
 Memory = sum(RSS of all ollama processes) / 1024²
 ```
 
-**What it measures**: The **physical memory (RSS)** used by all Ollama-related processes, measured via `psutil`.
+**What it measures**: The sum of RSS reported by `psutil` for matching Ollama-related processes. Division by 1024² yields MiB, although the original output labels it MB. Multiple process RSS values may count shared pages more than once. The code takes samples around requests; the maximum of those samples is not a continuously measured peak or an independent GPU allocation measurement.
 
-**Why it matters**: Mac Unified Memory and GPU VRAM are finite. If the model's memory usage keeps growing, swapping occurs and performance tanks.
+**Why it matters**: Memory pressure can lead to reclaim, compression, paging, or allocation failure depending on the platform and resource. RSS alone cannot identify which mechanism occurred.
 
 ## Benchmark Modes
 
@@ -124,7 +122,7 @@ Each round is independent (history reset). Input size stays constant. Answers: *
 Reproducibility is the most important property of a benchmark:
 
 1. **Fixed prompt sequence**: 20 hardcoded coding prompts ensure identical input every run
-2. **`seed: 42` + `temperature: 0`**: Guarantees identical output for identical input
+2. **`seed: 42` + `temperature: 0`**: Reduces sampling variability; identical output is not guaranteed across different versions, backends, or execution conditions
 3. **JSON export**: Save results to file for later comparison
 
 ```bash

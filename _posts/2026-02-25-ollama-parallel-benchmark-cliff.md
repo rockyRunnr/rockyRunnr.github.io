@@ -1,11 +1,14 @@
 ---
 title: "Finding the Performance Cliff: Parallel Request Benchmarking with Ollama"
 date: 2026-02-25 02:50:00 +0900
+last_modified_at: 2026-09-13 12:00:00 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, performance, parallel, kv-cache, memory, local-llm]
-description: "Sweeping parallelism from 1 to 10 concurrent requests on a 30B model to find exactly where performance falls off a cliff — and why KV cache pre-allocation is the culprit."
+description: "A fixed-slot parallel-request sweep and a separate model-load timeout: distinguishing per-request slowdown, total throughput, and KV capacity planning."
 mermaid: true
 ---
+
+**Correction — September 13, 2026:** Active requests (`P`) and configured slots (`OLLAMA_NUM_PARALLEL`) are different variables. The four-slot sweep kept RSS nearly constant; it does not show rising KV allocation or prove swap as P increases. Prefill duration replaces the original TTFT label, and the load timeout is no longer presented as a confirmed GPU OOM.
 
 ## The Question
 
@@ -13,11 +16,11 @@ After benchmarking [context growth](/posts/ollacode-prompt-optimization-benchmar
 
 > **Can I force KV cache memory pressure to the point of SSD swap and observe the performance cliff?**
 
-The answer: **yes, with parallel requests.** Each concurrent request gets its own KV cache allocation. Scale up parallelism → scale up KV cache memory → eventually exceed physical RAM.
+The experiment exposed two observations: a timeout when trying to warm up a ten-slot configuration, and lower per-request generation speed as active concurrency increased within a four-slot configuration. Neither observation alone proves swap-induced slowdown.
 
 ## How Ollama Handles Parallel Requests
 
-Ollama's `OLLAMA_NUM_PARALLEL` setting controls how many requests can be served simultaneously. The critical insight is that **KV cache memory is pre-allocated per slot at model load time**:
+In the configuration tested here, `OLLAMA_NUM_PARALLEL` controlled the configured serving slots and associated KV provisioning at load time. Active requests could use fewer slots. The following diagram is a rough capacity illustration from the original notes, not a direct buffer-allocation measurement:
 
 ```mermaid
 flowchart TD
@@ -54,35 +57,37 @@ The KV cache buffers are allocated to their **maximum size** (`num_ctx`) even be
 I added a `parallel-sweep` mode to [ollama-bench](https://github.com/rockyRunnr/ollama-bench) that:
 
 1. Fires **P** identical concurrent requests (P = 1, 2, 3, ...)
-2. Measures per-request gen speed, total throughput, TTFT, and memory
+2. Measures per-request gen speed, total throughput, prefill duration, and sampled RSS
 3. Auto-detects the **performance cliff** (where gen speed drops below 50% of baseline)
 
 ## Results
 
-### Attempt 1: `OLLAMA_NUM_PARALLEL=10` → **OOM Timeout**
+### Attempt 1: `OLLAMA_NUM_PARALLEL=10` → Warm-Up Timeout
 
 ```bash
 OLLAMA_NUM_PARALLEL=10 ollama serve
 ollama-bench --model qwen3-coder:30b --mode parallel-sweep --max-parallel 10
 ```
 
-**Result**: The model failed to load. Warm-up request timed out.
+**Observed result**: The warm-up request timed out; model loading did not complete within the test timeout. This record does not include a confirmed GPU OOM error.
 
 Why? With 10 KV cache slots:
 - Model parameters: ~19 GB
 - KV cache: ~1.3 GB × 10 = ~13 GB
 - **Total: ~32 GB** — exactly equal to physical RAM
 
-macOS + other processes already consume ~4-6 GB, so Ollama was fighting for memory before it could even serve a single request. Swap thrashing made it unresponsive.
+Those rough numbers leave little room for the OS, other processes, and compute buffers. Memory pressure is a plausible explanation for the timeout, but this test did not establish swap thrashing or the exact failing allocation.
 
 ### Attempt 2: `OLLAMA_NUM_PARALLEL=4` → **Cliff Found!**
 
-| P | Avg Gen t/s | Total Throughput t/s | TTFT (ms) | Memory (MB) |
+| P | Avg Gen t/s | Total Throughput t/s | Prefill (ms) | Sampled RSS (MiB) |
 |:-:|:-----------:|:--------------------:|:---------:|:-----------:|
 | **1** | **36.6** | 36.1 | 27 | 24,208 |
 | 2 | 23.0 (-37%) | 43.3 | 301 | 24,210 |
 | **3** | **15.6** (-57%) ⚠️ | **44.5** (peak) | 163 | 24,212 |
 | 4 | 11.8 (-68%) | 43.7 | 616 | 24,197 |
+
+The original `ttft_ms` field is `prompt_eval_duration`, not streamed first-token latency. RSS is sampled before and after each group of requests, not continuously. [Measurement implementation](https://github.com/rockyRunnr/ollama-bench/blob/main/ollama_bench/core.py)
 
 ### Key Metrics Explained
 
@@ -108,52 +113,29 @@ xychart-beta
 
 ## Analysis
 
-### 1. Memory Pre-Allocation Confirmed
+### 1. Nearly constant RSS within the four-slot sweep
 
-Even at P=1, memory was **24.2 GB** — not the 19 GB we'd see in single-slot mode. This proves that all 4 KV cache slots were pre-allocated at model load time, consuming ~5.2 GB for empty KV buffers.
+RSS stayed around 24,200 MiB from P=1 to P=4. This is consistent with capacity being provisioned for the configured four slots before all became active. It does not measure a new per-request KV allocation as P increases.
 
-```
-Single slot (NUM_PARALLEL=1):  ~19 GB
-Four slots  (NUM_PARALLEL=4):  ~24 GB  (+5 GB for 3 extra KV buffers)
-Ten slots   (NUM_PARALLEL=10): ~32 GB  (→ OOM, can't even load)
-```
+The earlier subtraction of a roughly 19 GB weight estimate from roughly 24 GB RSS mixed quantities and was not a reliable measurement of extra-slot KV bytes. A controlled sweep of configured slots and actual buffer logs is needed; the [one-active-request experiment](/posts/ollama-memory-pressure-experiment/) explores that separately.
 
 ### 2. Performance Cliff at P=3
 
-The cliff was detected at P=3, where individual request speed dropped below 50% of baseline (36.6 → 15.6 t/s). At this point, each user would experience nearly **3× slower** responses compared to having the model to themselves.
+The cliff was detected at P=3, where individual request speed dropped below 50% of baseline (36.6 → 15.6 t/s). At this point, each user would experience about **2.35× the generation time per token** compared to having the model to themselves.
 
 ### 3. Throughput Sweet Spot
 
-Total throughput peaked at P=3 (44.5 t/s), a **23% improvement** over single-request. Beyond P=3, adding more parallelism didn't help — GPU compute contention overcame the batching benefit.
+Total throughput peaked at P=3 (44.5 t/s), a **23% improvement** over single-request. P=4 was slightly lower in this run. Shared execution resources are a plausible explanation, but without repeated runs and profiler data this does not establish a universal optimum or isolate compute from bandwidth and scheduling effects.
 
-### 4. The Two Failure Modes
+### 4. Capacity and service speed need separate experiments
 
-```mermaid
-flowchart TD
-    A["Increase Parallelism"] --> B{"Memory > Physical RAM?"}
-    B -->|Yes| C["🔴 OOM: Model can't load<br/>(NUM_PARALLEL=10)"]
-    B -->|No| D{"GPU saturated?"}
-    D -->|Yes| E["🟡 Cliff: Per-request speed tanks<br/>(NUM_PARALLEL=4, P≥3)"]
-    D -->|No| F["🟢 Healthy: Throughput scales<br/>(NUM_PARALLEL=4, P=1-2)"]
+The ten-slot timeout motivates checking memory provisioning. The four-slot sweep shows per-request speed decreasing while aggregate throughput initially rises. It is possible to get better total throughput and worse individual latency at the same time.
 
-    style C fill:#e74c3c,stroke:#c0392b,color:#fff
-    style E fill:#f39c12,stroke:#d35400,color:#fff
-    style F fill:#27ae60,stroke:#1e8449,color:#fff
-```
+## Interpreting These Settings
 
-## Practical Recommendations
+The recorded P=1 value of 36.6 t/s was measured with `OLLAMA_NUM_PARALLEL=4`, not with that setting equal to one. The earlier recommendation table mistakenly relabeled the P values as configured slot counts and has been removed.
 
-For a **32 GB Mac with a 30B model**:
-
-| Setting | Use Case | Recommendation |
-|---------|----------|----------------|
-| `NUM_PARALLEL=1` | Single user, best speed | ✅ Default, 36.6 t/s |
-| `NUM_PARALLEL=2` | Two users/sessions | ⚠️ Acceptable, 23 t/s each |
-| `NUM_PARALLEL=3` | Server with multiple users | ⚠️ Near cliff, 15.6 t/s each |
-| `NUM_PARALLEL=4+` | High concurrency | ❌ Diminishing returns |
-| `NUM_PARALLEL=10` | Ambitious | ❌ Won't load |
-
-> **Rule of thumb**: On Apple Silicon, keep `NUM_PARALLEL` such that `model_size + (N × KV_cache_per_slot) < 80% of physical RAM`.
+For this run, P=1 gave the highest per-request speed and P=3 the highest aggregate throughput. Choosing a configuration requires matching the user's latency target and measuring memory headroom. A fixed fraction such as 80% of physical RAM is only a budgeting heuristic, not a safety guarantee.
 
 ## Running This Yourself
 
@@ -174,4 +156,4 @@ ollama-bench --model your-model --mode parallel-sweep --max-parallel 4 --output 
 
 ---
 
-*The performance cliff exists and is predictable. Know your model size, know your KV cache, know your RAM — and you can calculate exactly where the cliff will be.*
+*Configured capacity, active concurrency, and per-request latency are separate variables. These observations motivate further measurement rather than an exact universal cliff prediction.*

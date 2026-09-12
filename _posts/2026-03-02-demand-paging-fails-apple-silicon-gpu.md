@@ -1,43 +1,29 @@
 ---
-title: "Why OS-Level Demand Paging Fails on Apple Silicon GPU"
+title: "Why My Demand-Paging Approach Did Not Save KV Memory on Apple Silicon"
 date: 2026-03-02 12:00:00 +0900
+last_modified_at: 2026-09-13 12:00:00 +0900
 categories: [Research, LLM Internals]
 tags: [llm, kv-cache, apple-silicon, metal, demand-paging, memory-management, llama-cpp]
-description: "I tried to use macOS demand paging to save GPU memory in llama.cpp. It didn't work — and understanding why led to a better approach."
-image:
-  path: /assets/img/posts/kv-cache/demand-paging-cpu-vs-gpu.png
+description: "Revisiting a failed KV memory experiment: what the local RSS observations show, what they do not prove about Metal, and why I tried application-level buffer growth."
 mermaid: true
 ---
 
-## The Problem: 8 GB of Memory for a 10-Token Conversation
+**Correction — September 13, 2026:** The original post generalized a local result into the claim that GPUs cannot handle page faults and that all Metal buffers always commit every physical page at creation. The evidence presented here does not establish that. This revision separates the historical observations from the explanation, and removes the illustration that made the same unsupported generalization.
 
-In the [previous post](/posts/paged-attention-llama-cpp-deep-dive/), I built a paged KV cache wrapper for `llama.cpp`. It tracked blocks, managed metadata, and correctly dispatched to the inner `llama_kv_cache` — but memory usage was identical to vanilla.
+## The Problem: A Full KV Pool for a Short Conversation
 
-Why? Because the wrapper still allocated the full buffer upfront, and blocks were internally contiguous. The metadata-only approach saved nothing.
+In the [previous post](/posts/paged-attention-llama-cpp-deep-dive/), I built a paged KV cache wrapper for `llama.cpp`. It tracked blocks and delegated to the existing `llama_kv_cache`, but the full backing pool was still allocated upfront. Tracking free blocks alone did not reduce that allocation.
 
-To actually save memory, I needed to go deeper: **prevent physical memory from being committed for pages that aren't used yet.**
+My next question was whether I could keep a large virtual allocation while delaying physical backing for unused pages. This is a different question from distributing an already allocated pool among requests.
 
-## The Hypothesis: Demand Paging Should Work
+## The Hypothesis: Avoid Touching Unused Pages
 
-macOS uses demand paging for virtual memory. When you call `vm_allocate`, the OS reserves virtual address space but commits physical pages only on first access:
+CPU virtual-memory allocation can separate reserving an address range from physically backing its pages. The exact behavior depends on the allocation mechanism and subsequent accesses; virtual allocation size is not a measurement of resident memory.
 
-```
-vm_allocate(4 GB)
-
-Virtual:   [████████████████████████]  4 GB reserved (instant)
-Physical:  [                        ]  0 bytes       (nothing committed)
-
-First write → page fault:
-  page[0]  → [█                       ]  16 KB committed
-  page[3]  → [█  █                    ]  32 KB committed
-```
-
-Untouched pages consume zero physical RAM. This is how every modern OS manages memory.
-
-I found that `llama.cpp`'s Metal backend uses exactly this mechanism:
+The Metal backend path I investigated used `vm_allocate` followed by `newBufferWithBytesNoCopy`:
 
 ```objc
-// ggml-metal-device.m
+// Excerpt from the backend path investigated at the time.
 kern_return_t err = vm_allocate(mach_task_self(), &data, size, VM_FLAGS_ANYWHERE);
 
 res->buffers[0].metal = [device newBufferWithBytesNoCopy:data
@@ -46,131 +32,73 @@ res->buffers[0].metal = [device newBufferWithBytesNoCopy:data
                                              deallocator:nil];
 ```
 
-Step 1 allocates virtual memory with demand paging. Step 2 wraps it as a Metal GPU buffer in shared mode (unified memory — CPU and GPU share the same physical RAM on Apple Silicon).
+The second call exposes existing memory as a shared Metal buffer. “NoCopy” concerns reusing the data storage; the name does not promise lazy physical commitment. Unified CPU/GPU memory also does not, by itself, specify identical paging behavior for every resource and access path.
 
-My plan was simple:
+The experiment tried skipping `ggml_backend_buffer_clear(buf, 0)` and using `madvise(MADV_FREE_REUSABLE)` when sequences were removed. The idea was to avoid writes to unused regions and allow reclaiming memory. Skipping initialization also needs an independent correctness check: the existing clear protects against uninitialized padding, including NaNs affecting computation.
 
-1. Skip the `buffer_clear(buf, 0)` call that touches every page
-2. Let demand paging do its job — only pages written during inference get committed
-3. Use `madvise(MADV_FREE_REUSABLE)` to release pages when sequences are deleted
+## Historical RSS Observations
 
-**Zero code changes to the compute path. Zero kernel modifications. Just stop touching pages that don't need to be touched.**
+The original notes reported these values for small Qwen2.5 models:
 
-## Testing with Small Models: It Works!
+| Model | Context | Vanilla RSS | Experimental RSS | Recorded difference |
+|-------|---------|-------------|------------------|---------------------|
+| 0.5B | 32K | 37 MB | 18 MB | 52% lower |
+| 7B | 32K | 6.20 GB | 4.45 GB | About 1.8 GB lower |
 
-I implemented the plan and tested with Qwen2.5 (0.5B and 7B):
+Those are the original RSS labels and observations. The full allocation trace, offload configuration, and measurement timing have not been recovered for this correction. In particular, the very small 0.5B RSS values should not be presented as an audited total CPU-plus-GPU model footprint. A lower RSS alone does not demonstrate GPU demand paging or identify which buffers account for the difference.
 
-| Model | Context | Vanilla RSS | Paged RSS | Savings |
-|-------|---------|-------------|-----------|---------|
-| 0.5B  | 32K     | 37 MB       | 18 MB     | **52%** |
-| 7B    | 32K     | 6.20 GB     | 4.45 GB   | **30% (1.8 GB)** |
+For Qwen3.5-27B at 64K context, the notes instead reported:
 
-Promising! The 7B model saved 1.8 GB of real memory. The key fix was ensuring `buffer_clear()` was skipped — it was zero-filling the entire KV cache and touching every virtual page, defeating demand paging entirely.
-
-## Testing with 27B: It Doesn't Work
-
-Then I tested with Qwen3.5-27B, a 27B hybrid model with 64K context:
-
-```
-Vanilla RSS: 19.8 GB
-Paged RSS:   19.9 GB
-Savings:     0%
+```text
+Vanilla RSS:      19.8 GB
+Experimental RSS: 19.9 GB
 ```
 
-**Zero savings.** Not even a single megabyte.
+The expected reduction was absent in that setup. There was also a separate integration problem: the initial wrapper covered the standalone `llama_kv_cache` path, while Qwen3.5 used `llama_memory_hybrid`. The attention options needed to reach the cache inside that hybrid path.
 
-The problem wasn't demand paging itself. There were two issues:
+Qwen3.5-27B has **64 text layers: 16 full-attention and 48 Gated DeltaNet linear-attention layers**, not 16 attention plus 64 recurrent layers. The recurrent state and the full-attention KV cache are separate memory components. [Official model description](https://huggingface.co/Qwen/Qwen3.5-27B#model-overview)
 
-1. **Qwen3.5 is a hybrid architecture** — 3/4 of its layers are recurrent (SSM), not attention. Our paged wrapper only covered `llama_kv_cache`, which handles the attention layers. The SSM state memory was untouched.
+## What the Experiments Did Not Establish
 
-2. **And the deeper issue...** even for the attention layers, `newBufferWithBytesNoCopy` was defeating demand paging entirely.
+The original explanation attributed the larger-model result to eager physical commitment at `newBufferWithBytesNoCopy`. That was an interpretation of the local investigation. Without a controlled allocation-only reproduction and resource-residency measurements, this post cannot establish the exact commitment point or extend it to every Metal device and OS version.
 
-## The Discovery: Metal Commits All Physical Pages
+The statement “GPUs have no page-fault handler” was incorrect as a general claim. NVIDIA documents GPU page faults and on-demand migration for CUDA Unified Memory on supported hardware. That does not prove equivalent behavior for the Metal buffer path above; it shows why the platforms must be distinguished. [NVIDIA: Maximizing Unified Memory Performance in CUDA](https://developer.nvidia.com/blog/maximizing-unified-memory-performance-cuda/)
 
-Through deeper testing and analysis, I discovered that `newBufferWithBytesNoCopy` commits **all** physical pages at buffer creation time, regardless of whether they've been touched:
+The original notes also reported no useful saving from skipping the clear, applying `MADV_FREE_REUSABLE`, trying residency sets, or leaving the buffer untouched in the larger-model investigation. Those outcomes do not individually prove that Metal always prevents reclamation. Residency, virtual mappings, physical backing, and process RSS require separate measurements.
 
-```
-Step 1 (vm_allocate):
-  Virtual:  [████████████████]  4 GB
-  Physical: [                ]  0 bytes  ← demand paging active
+The narrower conclusion is sufficient for the next design step: **the approach tested here did not deliver the intended saving for the larger-model setup**. Smaller-model RSS changes and larger-model failures need their code paths and measurement conditions reconciled before assigning a single mechanism to both.
 
-Step 2 (newBufferWithBytesNoCopy):
-  Virtual:  [████████████████]  4 GB
-  Physical: [████████████████]  4 GB     ← ALL pages committed!
-```
+## The Pivot: Grow the Application's Buffer
 
-The name "NoCopy" is misleading. It means "don't copy the data" (use existing memory), not "don't commit the pages." When Metal creates a GPU buffer, it must register every virtual-to-physical page mapping in the **GPU MMU** — and unlike the CPU, the GPU has no page fault handler.
-
-### Why GPUs Can't Do Demand Paging
-
-```
-CPU access pattern:
-  page fault → kernel trap → allocate physical page → resume
-  (transparent, the program never knows)
-
-GPU access pattern:
-  page fault → ??? → GPU hang / crash
-  (no page fault handler exists on the GPU)
-```
-
-The CPU kernel can intercept page faults and lazily allocate physical memory. The GPU cannot. Therefore, Metal must ensure **every page is physically backed** before any GPU kernel could potentially access it. Even on Apple Silicon's unified memory (same physical RAM for CPU and GPU), the GPU MMU operates differently from the CPU MMU.
-
-### Everything I Tried (and Failed)
-
-| Attempt | Result | Why |
-|---------|--------|-----|
-| Skip `buffer_clear` | ❌ | `newBufferWithBytesNoCopy` already committed all pages |
-| `madvise(MADV_FREE_REUSABLE)` | ❌ | Metal holds references, OS can't reclaim |
-| MTL Residency Sets (lazy) | ❌ | Controls residency, not page commitment |
-| Don't touch the buffer at all | ❌ | Pages committed at `MTLBuffer` creation |
-
-## The Pivot: If You Can't Make Big Buffers Lazy, Make Small Buffers
-
-The realization was stark: **no OS-level trick can save memory for Metal GPU buffers.** The only way to use less memory is to allocate less memory.
-
-```
-Vanilla:    MTLBuffer(4 GB) → 4 GB physical RAM committed    💀
-Dynamic:    MTLBuffer(16 MB) → 16 MB physical RAM committed  ✅
-            → full? → MTLBuffer(32 MB) → copy → swap
-            → full? → MTLBuffer(64 MB) → copy → swap
-            → ...grow on demand
-```
-
-Instead of one big buffer with OS-level laziness (which doesn't work on GPU), allocate a **small contiguous buffer** and grow it when needed. This is entirely application-level — no OS magic, no kernel modifications, no custom Metal shaders.
-
-## The Design Difference: vLLM vs Our Approach
-
-This is fundamentally different from how vLLM solves the same problem:
+I moved to a design that directly changes the allocated KV buffer size:
 
 ```mermaid
-graph LR
-    subgraph "vLLM (Server)"
-        P["Fixed GPU Pool"] --> BT["Block Table"]
-        BT --> PK["PagedAttention Kernel"]
-    end
-
-    subgraph "Ours (Single Device)"
-        S["Small Buffer"] --> R["try_resize()"]
-        R --> L["Layer-by-Layer Copy"]
-        L --> B["Bigger Buffer"]
-    end
+flowchart LR
+    A["Small contiguous KV buffer"] --> B{"More slots needed?"}
+    B -->|Yes| C["Allocate larger buffer"]
+    C --> D["Copy data and preserve metadata"]
+    D --> E["Replace old buffer; refresh graph memory"]
 ```
 
-| Aspect | vLLM | Dynamic Resize |
-|--------|------|----------------|
-| Memory savings from | Pool sharing across requests | Minimal initial allocation |
-| Kernel changes | Custom PagedAttention kernel | **None** (standard ggml) |
-| Memory layout | Non-contiguous (block table) | **Contiguous** (Metal-optimal) |
-| Resize cost | None (pool internal) | Layer-by-layer copy (~45ms) |
-| Implementation | Very complex (~1000s LOC) | **Simple** (~200 LOC) |
-| Best for | Servers (many concurrent requests) | **Personal devices** (single user) |
+This avoids relying on a large untouched buffer having a small physical footprint. It introduces different costs: old and new buffers coexist during copying, state and tensor layouts must be preserved, and growth may fail when memory is exhausted.
 
-vLLM's approach requires custom GPU kernels that handle non-contiguous memory access via block tables. On Metal, writing custom GPU kernels is impractical — Apple's Metal Shading Language ecosystem doesn't have the same level of community tooling as CUDA. Our approach works *with* Metal's contiguous memory model instead of *against* it.
+The [dynamic-resize post](/posts/dynamic-kv-cache-resize-llama-cpp/) records the initial-allocation result and the limitations found in the submitted prototype. Its September correction includes a reproduced metadata-reset bug and a transposed-V copy-layout issue. It should not be read as a production-ready solution or a general OOM cure.
 
-## What's Next
+## PagedAttention and Dynamic Resize Address Different Layers
 
-The next post covers the implementation: `try_resize()`, the doubling-to-linear growth strategy, and benchmark results showing **8.3 GB memory savings** on a 27B model with zero GPU OOM crashes.
+| Aspect | Block-based PagedAttention | This dynamic-resize prototype |
+|--------|---------------------------|-------------------------------|
+| Main change | Map logical token blocks to physical KV blocks | Increase the capacity of contiguous KV tensors |
+| Sharing | Can share blocks for common prefixes | Uses the existing cache's sharing behavior |
+| Initial process allocation | Depends on how the backing pool is provisioned | Starts with a smaller backing buffer |
+| Attention path | Must understand the block mapping | Keeps the existing ggml attention path |
+| Growth cost | Depends on pool policy | Allocate, initialize, copy, and refresh graph memory |
+| Main validation concern | Block mapping, sharing, and kernel correctness | State preservation, layouts, transient peak, and failures |
+
+A PagedAttention pool can be reserved upfront. Free blocks inside it do not necessarily reduce the process's allocated GPU memory. Conversely, dynamic contiguous growth does not implement PagedAttention. [PagedAttention paper](https://arxiv.org/abs/2309.06180)
+
+I chose to keep the existing attention path to limit the implementation scope. This was an engineering choice for the prototype, not evidence that writing a Metal paged-attention kernel is impossible or impractical in general. The earlier approximately 45 ms copy-cost comparison has been removed because it is not a verified measurement for the submitted implementation.
 
 ---
 
-*This is part 2 of a 3-part series on KV cache optimization in llama.cpp. [Part 1](/posts/paged-attention-llama-cpp-deep-dive/) covers the initial PagedAttention implementation. Part 3 covers the Dynamic Resize implementation and benchmarks.*
+*Part 2 of a three-part KV cache investigation. [Part 1](/posts/paged-attention-llama-cpp-deep-dive/) covers the wrapper experiment; [Part 3](/posts/dynamic-kv-cache-resize-llama-cpp/) covers dynamic growth, historical measurements, and the later correctness review.*
