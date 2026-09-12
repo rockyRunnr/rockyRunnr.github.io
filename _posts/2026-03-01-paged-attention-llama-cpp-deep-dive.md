@@ -1,7 +1,7 @@
 ---
 title: "How llama.cpp Manages KV Cache — and How PagedAttention Fits In"
 date: 2026-03-01 00:00:00 +0900
-last_modified_at: 2026-09-13 12:00:00 +0900
+last_modified_at: 2026-09-13 01:27:13 +0900
 categories: [Research, LLM Internals]
 tags: [llm, kv-cache, paged-attention, llama-cpp, memory-management, c++]
 description: "A technical analysis of llama.cpp's KV cache architecture, the llama_memory_i interface, and how PagedAttention can be implemented as a composable new memory strategy."

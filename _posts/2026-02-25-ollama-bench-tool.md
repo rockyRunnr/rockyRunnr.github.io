@@ -1,7 +1,7 @@
 ---
 title: "ollama-bench: Building a Performance Benchmark Tool for Ollama"
 date: 2026-02-25 01:40:00 +0900
-last_modified_at: 2026-09-13 12:00:00 +0900
+last_modified_at: 2026-09-13 01:27:13 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, performance, python, local-llm, tools]
 description: "I built ollama-bench to measure local LLM performance degradation — token generation speed, prefill duration, and sampled process RSS over progressive requests."

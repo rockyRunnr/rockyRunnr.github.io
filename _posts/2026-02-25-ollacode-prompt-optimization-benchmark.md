@@ -1,7 +1,7 @@
 ---
 title: "ollacode System Prompt Optimization: Korean → English Benchmark Results"
 date: 2026-02-25 01:50:00 +0900
-last_modified_at: 2026-09-13 12:00:00 +0900
+last_modified_at: 2026-09-13 01:27:13 +0900
 categories: [Projects, ollacode]
 tags: [ollama, optimization, benchmark, performance, token-efficiency, prompt-engineering]
 description: "Switching ollacode's system prompt from Korean to English and measuring real performance gains with ollama-bench. About 60% lower recorded prefill duration and 55% fewer first-round input tokens in this local comparison."

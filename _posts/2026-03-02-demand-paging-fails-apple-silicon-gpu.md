@@ -1,7 +1,7 @@
 ---
 title: "Why My Demand-Paging Approach Did Not Save KV Memory on Apple Silicon"
 date: 2026-03-02 12:00:00 +0900
-last_modified_at: 2026-09-13 12:00:00 +0900
+last_modified_at: 2026-09-13 01:27:13 +0900
 categories: [Research, LLM Internals]
 tags: [llm, kv-cache, apple-silicon, metal, demand-paging, memory-management, llama-cpp]
 description: "Revisiting a failed KV memory experiment: what the local RSS observations show, what they do not prove about Metal, and why I tried application-level buffer growth."

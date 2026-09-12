@@ -1,7 +1,7 @@
 ---
 title: "Dynamic KV Cache Resize in llama.cpp — 8 GB Savings on a 27B Model"
 date: 2026-03-02 13:00:00 +0900
-last_modified_at: 2026-09-13 12:00:00 +0900
+last_modified_at: 2026-09-13 01:27:13 +0900
 categories: [Research, LLM Internals]
 tags: [llm, kv-cache, dynamic-resize, llama-cpp, apple-silicon, memory-management, benchmark]
 description: "A grow-only KV cache prototype: initial allocation savings, historical measurements, and correctness issues found in the submitted implementation."

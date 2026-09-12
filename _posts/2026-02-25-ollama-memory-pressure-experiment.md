@@ -1,7 +1,7 @@
 ---
 title: "Ollama Memory Pressure with One Active Request: Measurements and Limits"
 date: 2026-02-25 23:00:00 +0900
-last_modified_at: 2026-09-13 12:00:00 +0900
+last_modified_at: 2026-09-13 01:27:13 +0900
 categories: [Projects, ollama-bench]
 tags: [ollama, benchmark, memory, swap, kv-cache, performance, apple-silicon]
 description: "Holding request concurrency at one while increasing configured KV slots on a 32GB Mac Mini: observed slowdown, sampled RSS, and the limits of system-wide paging counters."
